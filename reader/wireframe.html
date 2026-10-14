@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Reader layout</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      font-family: sans-serif;
+      background: white;
+      color: black;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      height: 100vh;
+    }
+    header {
+      padding: 8px 12px;
+      border-bottom: 1px solid black;
+    }
+    main {
+      display: grid;
+      grid-template-columns: 1.4fr 360px;
+      min-height: 0;
+    }
+    section {
+      border: 1px solid black;
+      margin: 8px;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    h2 {
+      margin: 0;
+      padding: 8px;
+      border-bottom: 1px solid black;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .camera {
+      margin-right: 0;
+    }
+    .camera .stage {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    aside {
+      display: grid;
+      grid-template-rows: auto 1fr 1fr;
+      min-height: 0;
+    }
+    aside section { margin-left: 0; }
+    ul { list-style: none; margin: 0; padding: 8px; }
+    li { margin: 4px 0; }
+    .group { margin: 8px 8px 0; font-size: 12px; }
+    .queue { overflow: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid black; }
+  </style>
+</head>
+<body>
+  <header>Reader</header>
+  <main>
+    <section class="camera">
+      <h2>Camera</h2>
+      <div class="stage">Video with hand dots and finger lines</div>
+    </section>
+    <aside>
+      <section>
+        <h2>Active inputs</h2>
+        <div class="group">Triggers</div>
+        <ul>
+          <li><label><input type="checkbox"> Left closed fist</label></li>
+          <li><label><input type="checkbox"> Right closed fist</label></li>
+          <li><label><input type="checkbox"> Left open palm</label></li>
+          <li><label><input type="checkbox"> Right open palm</label></li>
+        </ul>
+        <div class="group">Sliders</div>
+        <ul>
+          <li><label><input type="checkbox"> Left palm X</label></li>
+          <li><label><input type="checkbox"> Left palm Y</label></li>
+          <li><label><input type="checkbox"> Left palm Z</label></li>
+          <li><label><input type="checkbox"> Right palm X</label></li>
+          <li><label><input type="checkbox"> Right palm Y</label></li>
+          <li><label><input type="checkbox"> Right palm Z</label></li>
+        </ul>
+      </section>
+      <section class="queue">
+        <h2>Trigger changes</h2>
+        <table>
+          <thead>
+            <tr><th>Time</th><th>Hand</th><th>Control</th><th>Edge</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>0:12.40</td><td>L</td><td>closed fist</td><td>0 → 1</td></tr>
+            <tr><td>0:12.08</td><td>R</td><td>open palm</td><td>1 → 0</td></tr>
+            <tr><td>0:11.90</td><td>R</td><td>open palm</td><td>0 → 1</td></tr>
+          </tbody>
+        </table>
+      </section>
+      <section class="queue">
+        <h2>Slider changes</h2>
+        <table>
+          <thead>
+            <tr><th>Time</th><th>Hand</th><th>Control</th><th>Value</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>0:12.41</td><td>L</td><td>palm X</td><td>180</td></tr>
+            <tr><td>0:12.38</td><td>L</td><td>palm Y</td><td>96</td></tr>
+            <tr><td>0:12.31</td><td>R</td><td>palm Z</td><td>40</td></tr>
+          </tbody>
+        </table>
+      </section>
+    </aside>
+  </main>
+</body>
+</html>
