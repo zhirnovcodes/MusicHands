@@ -1,0 +1,4 @@
+-r ../../reader/requirements.txt
+-r ../../bridge/requirements.txt
+pywebview>=5.0
+pyinstaller>=6.0

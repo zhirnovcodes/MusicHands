@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>MusicHands</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      font-family: sans-serif;
+      background: white;
+      color: black;
+    }
+    .shell {
+      display: flex;
+      width: 100vw;
+      height: 100vh;
+    }
+    .reader-pane {
+      flex: 1;
+      min-width: 0;
+      height: 100%;
+    }
+    .reader-pane iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      display: block;
+    }
+    .bridge-drawer {
+      width: 380px;
+      height: 100%;
+      border-left: 1px solid black;
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      background: white;
+      min-height: 0;
+    }
+    .bridge-drawer.collapsed {
+      width: 42px;
+      grid-template-rows: auto 1fr;
+    }
+    .drawer-header {
+      padding: 6px 8px;
+      border-bottom: 1px solid black;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 35px;
+    }
+    .drawer-title {
+      font-size: 16px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .bridge-drawer.collapsed .drawer-title,
+    .bridge-drawer.collapsed .status-section,
+    .bridge-drawer.collapsed .logs-section {
+      display: none;
+    }
+    .collapsed-strip {
+      display: none;
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 12px 0;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      user-select: none;
+    }
+    .bridge-drawer.collapsed .collapsed-strip {
+      display: flex;
+    }
+    button {
+      font: inherit;
+      font-size: 12px;
+      padding: 2px 8px;
+      background: white;
+      color: black;
+      border: 1px solid black;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #f2f2f2;
+    }
+    section {
+      border: 1px solid black;
+      margin: 8px;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .status-section {
+      margin-bottom: 0;
+    }
+    h2 {
+      margin: 0;
+      padding: 8px;
+      border-bottom: 1px solid black;
+      font-size: 14px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .status-body {
+      padding: 8px;
+      font-size: 12px;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+    .queue {
+      overflow: auto;
+      flex: 1;
+      min-height: 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th, td {
+      text-align: left;
+      padding: 4px 8px;
+      border-bottom: 1px solid black;
+      white-space: nowrap;
+    }
+    td.midi-cell {
+      font-family: Consolas, monospace;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="reader-pane">
+      <iframe id="reader-frame" src="http://127.0.0.1:9110" title="Reader"></iframe>
+    </div>
+    <aside id="bridge-drawer" class="bridge-drawer">
+      <div class="drawer-header">
+        <span class="drawer-title">Bridge</span>
+        <button id="toggle-drawer" type="button" title="Collapse or expand Bridge MIDI logs">Hide &raquo;</button>
+      </div>
+      <div id="collapsed-strip" class="collapsed-strip" title="Show Bridge MIDI logs">
+        MIDI signals
+      </div>
+      <section class="status-section">
+        <h2>
+          <span>MIDI status</span>
+        </h2>
+        <div id="bridge-status" class="status-body">Starting bridge...</div>
+      </section>
+      <section class="logs-section">
+        <h2>
+          <span>MIDI signals</span>
+          <button id="clear-logs" type="button">Clear</button>
+        </h2>
+        <div class="queue">
+          <table>
+            <thead>
+              <tr><th>Time</th><th>Control</th><th>Signal</th></tr>
+            </thead>
+            <tbody id="bridge-rows"></tbody>
+          </table>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <script>
+    const drawer = document.getElementById("bridge-drawer");
+    const toggleBtn = document.getElementById("toggle-drawer");
+    const collapsedStrip = document.getElementById("collapsed-strip");
+    const clearBtn = document.getElementById("clear-logs");
+    const statusBox = document.getElementById("bridge-status");
+    const bridgeRows = document.getElementById("bridge-rows");
+
+    let cursor = 0;
+    const statusLines = [];
+
+    function setCollapsed(collapsed) {
+      drawer.classList.toggle("collapsed", collapsed);
+      toggleBtn.innerHTML = collapsed ? "&laquo;" : "Hide &raquo;";
+    }
+
+    toggleBtn.addEventListener("click", () => {
+      setCollapsed(!drawer.classList.contains("collapsed"));
+    });
+
+    collapsedStrip.addEventListener("click", () => {
+      setCollapsed(false);
+    });
+
+    clearBtn.addEventListener("click", () => {
+      bridgeRows.innerHTML = "";
+    });
+
+    function prependRow(cells) {
+      const row = document.createElement("tr");
+      cells.forEach((text, idx) => {
+        const cell = document.createElement("td");
+        if (idx === 2) {
+          cell.className = "midi-cell";
+        }
+        cell.textContent = text;
+        row.appendChild(cell);
+      });
+      bridgeRows.insertBefore(row, bridgeRows.firstChild);
+      while (bridgeRows.children.length > 200) {
+        bridgeRows.removeChild(bridgeRows.lastChild);
+      }
+    }
+
+    function handleLogEntry(entry) {
+      const text = entry.text || "";
+      const arrowIdx = text.indexOf("->");
+      if (arrowIdx !== -1) {
+        const control = text.slice(0, arrowIdx).trim();
+        const signal = text.slice(arrowIdx + 2).trim();
+        prependRow([entry.time, control, signal]);
+      } else {
+        if (!statusLines.includes(text)) {
+          statusLines.push(text);
+          if (statusLines.length > 4) {
+            statusLines.shift();
+          }
+          statusBox.innerHTML = "";
+          for (const line of statusLines) {
+            const div = document.createElement("div");
+            div.textContent = line;
+            statusBox.appendChild(div);
+          }
+        }
+      }
+    }
+
+    async function pollBridgeLogs() {
+      if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.get_midi_logs) {
+        return;
+      }
+      try {
+        const items = await window.pywebview.api.get_midi_logs(cursor);
+        if (Array.isArray(items)) {
+          for (const item of items) {
+            cursor = item.n;
+            handleLogEntry(item);
+          }
+        }
+      } catch (err) {
+        // Ignore transient bridge polling errors during shutdown
+      }
+    }
+
+    setInterval(pollBridgeLogs, 200);
+  </script>
+</body>
+</html>
