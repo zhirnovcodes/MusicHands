@@ -1,0 +1,18 @@
+{
+  "udp_host": "127.0.0.1",
+  "udp_port": 9100,
+  "midi_port": "MusicHands",
+  "release_timeout_ms": 500,
+  "mappings": {
+    "R:closed_fist": { "type": "note", "channel": 1, "note": 60, "velocity": 127 },
+    "R:open_palm":   { "type": "note", "channel": 1, "note": 62, "velocity": 127 },
+    "R:palm_x":      { "type": "cc",   "channel": 1, "control": 16, "min": 0, "max": 127 },
+    "R:palm_y":      { "type": "cc",   "channel": 1, "control": 17, "min": 0, "max": 127 },
+    "R:palm_z":      { "type": "cc",   "channel": 1, "control": 18, "min": 0, "max": 127 },
+    "L:closed_fist": { "type": "note", "channel": 2, "note": 60, "velocity": 127 },
+    "L:open_palm":   { "type": "note", "channel": 2, "note": 62, "velocity": 127 },
+    "L:palm_x":      { "type": "cc",   "channel": 2, "control": 16, "min": 0, "max": 127 },
+    "L:palm_y":      { "type": "cc",   "channel": 2, "control": 17, "min": 0, "max": 127 },
+    "L:palm_z":      { "type": "cc",   "channel": 2, "control": 18, "min": 0, "max": 127 }
+  }
+}

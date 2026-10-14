@@ -111,7 +111,7 @@ class ControlTracker:
 
         releases = []
         for key, previous in self._on_wire.items():
-            if key not in active and previous != 0:
+            if KIND[key[1]] == "trigger" and key not in active and previous != 0:
                 releases.append(key)
         self._on_wire = dict(active)
 
