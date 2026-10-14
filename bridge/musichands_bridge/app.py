@@ -2,11 +2,13 @@
 
 import argparse
 import json
+import random
 import socket
 import sys
 import time
 
-from musichands_bridge.config import DEFAULT_CONFIG_PATH, load_config, parse_control_key
+from musichands_bridge.config import DEFAULT_CONFIG_PATH, SLIDER_IDS, load_config, parse_control_key
+from musichands_bridge.driver import install_loopmidi_driver, is_driver_installed
 from musichands_bridge.midi_out import MissingMidiPortError, MidiOutput, list_output_ports
 from musichands_bridge.translator import MidiTranslator
 
@@ -27,9 +29,19 @@ def build_parser():
         help="Only forward one control key (e.g. R:palm_y) for easy DAW MIDI Learn",
     )
     parser.add_argument(
-        "--dry-run",
+        "--test",
         action="store_true",
-        help="Translate and log MIDI events without opening a MIDI output port",
+        help="Test mode: create the virtual MIDI port and send random values for one slider once per second (does not listen on UDP)",
+    )
+    parser.add_argument(
+        "--install-driver",
+        action="store_true",
+        help="Install the loopMIDI / teVirtualMIDI driver from loopMidi_install/ and exit",
+    )
+    parser.add_argument(
+        "--no-auto-install",
+        action="store_true",
+        help="Do not automatically launch the driver installer if teVirtualMIDI is missing",
     )
     parser.add_argument(
         "--list-ports",
@@ -51,6 +63,59 @@ def emit_actions(actions, midi_out, quiet):
             print(action.format_log(), flush=True)
 
 
+def _pick_test_slider_key(config, solo_key=None):
+    if solo_key is not None and solo_key in config.mappings:
+        return solo_key
+    if "R:palm_y" in config.mappings:
+        return "R:palm_y"
+    for key in config.mappings:
+        parsed = parse_control_key(key)
+        if parsed is not None and parsed[1] in SLIDER_IDS:
+            return key
+    return next(iter(config.mappings), "R:palm_y")
+
+
+def run_test_mode(config, midi_out, solo_key=None, quiet=False):
+    slider_key = _pick_test_slider_key(config, solo_key)
+    hand, control_id = parse_control_key(slider_key) or ("R", "palm_y")
+    translator = MidiTranslator(config.mappings, solo_key=slider_key)
+
+    print(f"MIDI output: {midi_out.resolved_name}", flush=True)
+    print(f"Test mode: sending random values for {slider_key} every 1.0s (UDP disabled)", flush=True)
+
+    started = time.monotonic()
+    last_raw = None
+    try:
+        while True:
+            raw_value = random.randint(0, 255)
+            if last_raw is not None and abs(raw_value - last_raw) < 4:
+                raw_value = (raw_value + 64) % 256
+            last_raw = raw_value
+
+            frame = {
+                "v": 1,
+                "t_ms": int((time.monotonic() - started) * 1000),
+                "source": "test",
+                "controls": [
+                    {
+                        "id": control_id,
+                        "hand": hand,
+                        "kind": "slider",
+                        "value": raw_value,
+                    }
+                ],
+            }
+            actions = translator.process_frame(frame)
+            emit_actions(actions, midi_out, quiet)
+            time.sleep(1.0)
+    except KeyboardInterrupt:
+        print("\nStopping test mode", flush=True)
+    finally:
+        released = translator.release_all_triggers()
+        emit_actions(released, midi_out, quiet)
+        midi_out.close()
+
+
 def run_bridge(config, midi_out, solo_key=None, quiet=False):
     translator = MidiTranslator(config.mappings, solo_key=solo_key)
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -58,9 +123,8 @@ def run_bridge(config, midi_out, solo_key=None, quiet=False):
     timeout_s = max(0.05, config.release_timeout_ms / 1000.0)
     sock.settimeout(timeout_s)
 
-    port_label = "(dry-run)" if midi_out.dry_run else midi_out.resolved_name
+    print(f"MIDI output: {midi_out.resolved_name}", flush=True)
     print(f"Listening on UDP {config.udp_host}:{config.udp_port}", flush=True)
-    print(f"MIDI output: {port_label}", flush=True)
     if solo_key:
         print(f"Solo filter: {solo_key} only", flush=True)
 
@@ -93,14 +157,27 @@ def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    if args.install_driver:
+        try:
+            if is_driver_installed():
+                print("Virtual MIDI driver (teVirtualMIDI64.dll) is already installed.")
+            else:
+                install_loopmidi_driver(quiet=args.quiet)
+        except Exception as exc:
+            print(f"Driver installation failed: {exc}", file=sys.stderr)
+            return 1
+        return 0
+
     if args.list_ports:
         try:
             ports = list_output_ports()
         except RuntimeError as exc:
             print(str(exc), file=sys.stderr)
             return 1
+        driver_state = "installed" if is_driver_installed() else "not installed"
+        print(f"teVirtualMIDI driver: {driver_state}")
         if not ports:
-            print("No MIDI output ports detected.")
+            print("No active MIDI output ports detected.")
         else:
             print("Available MIDI output ports:")
             for name in ports:
@@ -129,12 +206,18 @@ def main(argv=None):
     )
 
     try:
-        midi_out = MidiOutput(config.midi_port, dry_run=args.dry_run)
-    except (MissingMidiPortError, RuntimeError) as exc:
+        midi_out = MidiOutput(
+            config.midi_port,
+            auto_install_driver=not args.no_auto_install,
+        )
+    except (MissingMidiPortError, RuntimeError, OSError) as exc:
         print(str(exc), file=sys.stderr)
         return 1
 
-    run_bridge(config, midi_out, solo_key=args.solo, quiet=args.quiet)
+    if args.test:
+        run_test_mode(config, midi_out, solo_key=args.solo, quiet=args.quiet)
+    else:
+        run_bridge(config, midi_out, solo_key=args.solo, quiet=args.quiet)
     return 0
 
 

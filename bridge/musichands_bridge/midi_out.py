@@ -1,8 +1,18 @@
-"""MIDI output port discovery and message sending via mido + python-rtmidi."""
+"""MIDI output port creation (teVirtualMIDI) and fallback discovery (mido + python-rtmidi)."""
+
+import sys
+
+from musichands_bridge.driver import (
+    DriverNotInstalledError,
+    PortAlreadyExistsError,
+    TeVirtualMidiPort,
+    install_loopmidi_driver,
+    is_driver_installed,
+)
 
 
 class MissingMidiPortError(RuntimeError):
-    """Raised when the configured MIDI output port is not available."""
+    """Raised when the configured MIDI output port cannot be created or opened."""
 
 
 def _import_mido():
@@ -45,12 +55,11 @@ def resolve_output_port_name(target_name, available_names=None):
     return None
 
 
-def format_missing_port_help(target_name, available_names):
-    lines = [
-        f"MIDI output port {target_name!r} was not found.",
-        "",
-        "Available MIDI output ports:",
-    ]
+def format_missing_port_help(target_name, available_names, reason=None):
+    lines = [f"MIDI output port {target_name!r} could not be created or opened."]
+    if reason:
+        lines.append(f"Reason: {reason}")
+    lines.extend(["", "Available MIDI output ports:"])
     if available_names:
         for name in available_names:
             lines.append(f"  - {name}")
@@ -60,36 +69,60 @@ def format_missing_port_help(target_name, available_names):
         [
             "",
             "Setup instructions:",
-            f"  1. Open loopMIDI and create a virtual port named {target_name!r}.",
+            "  1. Run: python -m musichands_bridge --install-driver",
             "  2. In Ableton Live (Preferences -> Link, Tempo & MIDI), enable 'Track' and 'Remote' for Input: "
             f"{target_name}.",
-            "  3. Or run with --dry-run to test UDP translation without a MIDI port.",
         ]
     )
     return "\n".join(lines)
 
 
 class MidiOutput:
-    """Thin wrapper around a mido output port (or no-op in dry-run mode)."""
+    """Creates a virtual MIDI port via teVirtualMIDI, or opens an existing port via mido."""
 
-    def __init__(self, target_name, dry_run=False):
+    def __init__(self, target_name, auto_install_driver=True):
         self.target_name = target_name
-        self.dry_run = dry_run
         self.resolved_name = None
+        self.backend = None
+        self._virtual_port = None
         self._mido = None
         self._port = None
 
-        if not dry_run:
-            self._mido = _import_mido()
-            available = list(self._mido.get_output_names())
-            resolved = resolve_output_port_name(target_name, available)
-            if resolved is None:
-                raise MissingMidiPortError(format_missing_port_help(target_name, available))
-            self.resolved_name = resolved
-            self._port = self._mido.open_output(resolved)
+        if sys.platform == "win32":
+            if not is_driver_installed() and auto_install_driver:
+                install_loopmidi_driver()
+
+            if is_driver_installed():
+                try:
+                    self._virtual_port = TeVirtualMidiPort(target_name)
+                    self.resolved_name = f"{target_name} (virtual port created)"
+                    self.backend = "teVirtualMIDI"
+                    return
+                except PortAlreadyExistsError:
+                    # Port already exists (e.g. created in loopMIDI GUI); fall back to mido.
+                    pass
+                except DriverNotInstalledError:
+                    if auto_install_driver:
+                        install_loopmidi_driver()
+                        self._virtual_port = TeVirtualMidiPort(target_name)
+                        self.resolved_name = f"{target_name} (virtual port created)"
+                        self.backend = "teVirtualMIDI"
+                        return
+
+        self._mido = _import_mido()
+        available = list(self._mido.get_output_names())
+        resolved = resolve_output_port_name(target_name, available)
+        if resolved is None:
+            raise MissingMidiPortError(format_missing_port_help(target_name, available))
+        self.resolved_name = resolved
+        self.backend = "mido"
+        self._port = self._mido.open_output(resolved)
 
     def send(self, action):
-        if self.dry_run or self._port is None:
+        if self._virtual_port is not None:
+            self._virtual_port.send_action(action)
+            return
+        if self._port is None:
             return
         if action.msg_type == "control_change":
             msg = self._mido.Message(
@@ -117,6 +150,11 @@ class MidiOutput:
         self._port.send(msg)
 
     def close(self):
+        if self._virtual_port is not None:
+            try:
+                self._virtual_port.close()
+            finally:
+                self._virtual_port = None
         if self._port is not None:
             try:
                 self._port.close()
