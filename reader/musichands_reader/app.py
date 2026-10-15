@@ -26,6 +26,12 @@ from musichands_reader.camera import (
     wait_stop,
 )
 from musichands_reader.catalog import LABELS, parse_key
+from musichands_reader.hand_rectangles import (
+    RECTANGLES_PATH,
+    draw_rectangles,
+    load_rectangles,
+    save_rectangles,
+)
 from musichands_reader.hand_tracker import (
     MODEL_PATH,
     HandTracker,
@@ -40,10 +46,11 @@ ENABLED_PATH = ROOT / "enabled.json"
 
 
 class ReaderState:
-    def __init__(self, enabled, camera_index):
+    def __init__(self, enabled, camera_index, rectangles=None):
         self.condition = threading.Condition()
         self.stop = False
         self.enabled = set(enabled)
+        self.rectangles = rectangles if rectangles is not None else load_rectangles(RECTANGLES_PATH)
         self.camera_index = camera_index
         self.camera_status = "opening"
         self.camera_resolution = None
@@ -94,8 +101,11 @@ def reader_loop(state, publisher, started, model_path=None):
         for frame, black in iter_camera_frames(state):
             with state.condition:
                 enabled = set(state.enabled)
+                rect_manager = state.rectangles
             try:
-                controls, events, landmark_groups = hand_tracker.process_frame(frame, enabled)
+                controls, events, landmark_groups, active_rects = hand_tracker.process_frame(
+                    frame, enabled, rect_manager
+                )
             except Exception as exc:
                 print(f"Tracker error: {exc}")
                 publish_frame(state, text_jpeg("Tracker error"))
@@ -110,6 +120,7 @@ def reader_loop(state, publisher, started, model_path=None):
                     "controls": controls,
                 }
             )
+            draw_rectangles(frame, active_rects)
             draw_hands(frame, landmark_groups)
             if black:
                 draw_black_warning(frame)
@@ -151,6 +162,11 @@ class ReaderHandler(BaseHTTPRequestHandler):
                 keys = sorted(f"{hand}:{control_id}" for hand, control_id in self.state.enabled)
             self._send(200, "application/json", json.dumps({"enabled": keys}).encode("utf-8"))
             return
+        if parsed.path == "/api/rectangles":
+            with self.state.condition:
+                body = self.state.rectangles.to_dict()
+            self._send(200, "application/json", json.dumps(body).encode("utf-8"))
+            return
         if parsed.path == "/api/camera":
             with self.state.condition:
                 body = {"index": self.state.camera_index, "status": self.state.camera_status}
@@ -177,6 +193,9 @@ class ReaderHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/camera":
             self._set_camera()
             return
+        if parsed.path == "/api/rectangles":
+            self._set_rectangles()
+            return
         if parsed.path != "/api/enabled":
             self.send_error(404)
             return
@@ -197,6 +216,21 @@ class ReaderHandler(BaseHTTPRequestHandler):
         with self.state.condition:
             self.state.enabled = enabled
         save_enabled(enabled)
+        self._send(200, "application/json", b'{"ok":true}')
+
+    def _set_rectangles(self):
+        length = int(self.headers.get("Content-Length", "0"))
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            self.send_error(400)
+            return
+        with self.state.condition:
+            if not self.state.rectangles.update_from_dict(payload):
+                self.send_error(400)
+                return
+            mgr = self.state.rectangles
+        save_rectangles(mgr, rectangles_path=RECTANGLES_PATH)
         self._send(200, "application/json", b'{"ok":true}')
 
     def _set_camera(self):

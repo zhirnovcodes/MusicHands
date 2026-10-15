@@ -65,9 +65,22 @@
       min-height: 0;
     }
     aside section { margin-left: 0; }
+    aside section.settings { overflow: auto; max-height: 55vh; }
     ul { list-style: none; margin: 0; padding: 8px; }
     li { margin: 4px 0; }
     .group { margin: 8px 8px 0; font-size: 12px; }
+    .rect-manual { padding: 0 8px 8px; font-size: 12px; }
+    .rect-manual[hidden] { display: none; }
+    .rect-hand { margin-top: 6px; font-weight: 600; }
+    .rect-grid {
+      display: grid;
+      grid-template-columns: 64px 1fr 34px;
+      align-items: center;
+      gap: 4px 6px;
+      margin-top: 4px;
+    }
+    .rect-grid input[type="range"] { width: 100%; margin: 0; }
+    .rect-val { text-align: right; font-variant-numeric: tabular-nums; }
     .queue { overflow: auto; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid black; }
@@ -87,7 +100,7 @@
       </div>
     </section>
     <aside>
-      <section>
+      <section class="settings">
         <h2>Active inputs</h2>
         <div class="group">Triggers</div>
         <ul>
@@ -105,6 +118,42 @@
           <li><label><input type="checkbox" data-key="R:palm_y"> Right palm Y</label></li>
           <li><label><input type="checkbox" data-key="R:palm_z"> Right palm Z</label></li>
         </ul>
+        <div class="group">Rectangles</div>
+        <ul>
+          <li><label><input type="checkbox" id="rect-auto" checked> Automatic rectangles</label></li>
+        </ul>
+        <div id="rect-manual" class="rect-manual" hidden>
+          <div class="rect-hand">Left hand (red)</div>
+          <div class="rect-grid">
+            <label for="rect-L-cx">Center X</label>
+            <input type="range" id="rect-L-cx" data-hand="L" data-field="center_x" min="0" max="1" step="0.01" value="0.25">
+            <span class="rect-val" id="val-L-cx">0.25</span>
+            <label for="rect-L-cy">Center Y</label>
+            <input type="range" id="rect-L-cy" data-hand="L" data-field="center_y" min="0" max="1" step="0.01" value="0.50">
+            <span class="rect-val" id="val-L-cy">0.50</span>
+            <label for="rect-L-w">Width X</label>
+            <input type="range" id="rect-L-w" data-hand="L" data-field="width" min="0" max="1" step="0.01" value="0.40">
+            <span class="rect-val" id="val-L-w">0.40</span>
+            <label for="rect-L-h">Height Y</label>
+            <input type="range" id="rect-L-h" data-hand="L" data-field="height" min="0" max="1" step="0.01" value="0.70">
+            <span class="rect-val" id="val-L-h">0.70</span>
+          </div>
+          <div class="rect-hand">Right hand (blue)</div>
+          <div class="rect-grid">
+            <label for="rect-R-cx">Center X</label>
+            <input type="range" id="rect-R-cx" data-hand="R" data-field="center_x" min="0" max="1" step="0.01" value="0.75">
+            <span class="rect-val" id="val-R-cx">0.75</span>
+            <label for="rect-R-cy">Center Y</label>
+            <input type="range" id="rect-R-cy" data-hand="R" data-field="center_y" min="0" max="1" step="0.01" value="0.50">
+            <span class="rect-val" id="val-R-cy">0.50</span>
+            <label for="rect-R-w">Width X</label>
+            <input type="range" id="rect-R-w" data-hand="R" data-field="width" min="0" max="1" step="0.01" value="0.40">
+            <span class="rect-val" id="val-R-w">0.40</span>
+            <label for="rect-R-h">Height Y</label>
+            <input type="range" id="rect-R-h" data-hand="R" data-field="height" min="0" max="1" step="0.01" value="0.70">
+            <span class="rect-val" id="val-R-h">0.70</span>
+          </div>
+        </div>
       </section>
       <section class="queue">
         <h2>Trigger changes</h2>
@@ -227,7 +276,73 @@
       box.disabled = true;
       box.addEventListener("change", saveEnabled);
     }
-    loadEnabled().then(() => {
+
+    const rectAuto = document.getElementById("rect-auto");
+    const rectManual = document.getElementById("rect-manual");
+    const rectSliders = document.querySelectorAll("#rect-manual input[type='range']");
+
+    function syncRectLabels() {
+      rectManual.hidden = rectAuto.checked;
+      for (const slider of rectSliders) {
+        const display = slider.nextElementSibling;
+        if (display) {
+          display.textContent = Number(slider.value).toFixed(2);
+        }
+      }
+    }
+
+    function collectRectanglesPayload() {
+      const payload = {
+        automatic: rectAuto.checked,
+        L: {},
+        R: {}
+      };
+      for (const slider of rectSliders) {
+        payload[slider.dataset.hand][slider.dataset.field] = Number(slider.value);
+      }
+      return payload;
+    }
+
+    async function saveRectangles() {
+      syncRectLabels();
+      try {
+        await fetch("/api/rectangles", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(collectRectanglesPayload())
+        });
+      } catch (err) {
+        // Ignore network errors while server endpoint is unavailable
+      }
+    }
+
+    async function loadRectangles() {
+      try {
+        const response = await fetch("/api/rectangles");
+        if (!response.ok) {
+          syncRectLabels();
+          return;
+        }
+        const data = await response.json();
+        rectAuto.checked = Boolean(data.automatic);
+        for (const slider of rectSliders) {
+          const handCfg = data[slider.dataset.hand];
+          if (handCfg && typeof handCfg[slider.dataset.field] === "number") {
+            slider.value = String(handCfg[slider.dataset.field]);
+          }
+        }
+      } catch (err) {
+        // Keep defaults if endpoint is not yet active
+      }
+      syncRectLabels();
+    }
+
+    rectAuto.addEventListener("change", saveRectangles);
+    for (const slider of rectSliders) {
+      slider.addEventListener("input", saveRectangles);
+    }
+
+    Promise.all([loadEnabled(), loadRectangles()]).then(() => {
       for (const box of boxes) {
         box.disabled = false;
       }

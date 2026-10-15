@@ -65,7 +65,7 @@ def get_data_dir() -> Path:
 
     try:
         data_dir.mkdir(parents=True, exist_ok=True)
-        for filename in ("config.json", "enabled.json", "camera.json"):
+        for filename in ("config.json", "enabled.json", "camera.json", "rectangles.json"):
             src = app_dir / filename
             dst = data_dir / filename
             if not dst.exists() and src.exists():
@@ -219,6 +219,7 @@ def run_reader_worker(
 
     from musichands_reader import app as reader_app
     from musichands_reader import camera as reader_camera
+    from musichands_reader import hand_rectangles as reader_rectangles
     from musichands_reader import hand_tracker as reader_hand_tracker
 
     def _signal_reader_stop():
@@ -247,6 +248,8 @@ def run_reader_worker(
         reader_app.ENABLED_PATH = data_dir / "enabled.json"
         reader_app.CAMERA_PATH = data_dir / "camera.json"
         reader_camera.CAMERA_PATH = reader_app.CAMERA_PATH
+        reader_app.RECTANGLES_PATH = data_dir / "rectangles.json"
+        reader_rectangles.RECTANGLES_PATH = reader_app.RECTANGLES_PATH
 
     argv = [
         "musichands_reader",

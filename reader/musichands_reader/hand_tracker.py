@@ -19,7 +19,13 @@ from mediapipe.tasks.python.vision import (
 )
 
 from musichands_reader.catalog import GOOGLE_TO_ID
-from musichands_reader.features import WRIST, ControlTracker, HandObservation, hand_span
+from musichands_reader.features import (
+    ControlTracker,
+    HandObservation,
+    hand_span,
+    palm_center,
+    palm_margins,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 MODEL_PATH = ROOT / "models" / "gesture_recognizer.task"
@@ -59,6 +65,11 @@ def draw_hands(frame, hands):
         for point in points:
             cv2.circle(frame, point, 4, (255, 255, 255), -1, cv2.LINE_AA)
             cv2.circle(frame, point, 4, (0, 0, 0), 1, cv2.LINE_AA)
+        if len(landmarks) > 17:
+            px, py = palm_center(landmarks)
+            center_pt = (int(px * width), int(py * height))
+            cv2.circle(frame, center_pt, 6, (0, 0, 255), -1, cv2.LINE_AA)
+            cv2.circle(frame, center_pt, 6, (0, 0, 0), 1, cv2.LINE_AA)
 
 
 def observations_from_result(result):
@@ -68,7 +79,7 @@ def observations_from_result(result):
     gestures = result.gestures or []
     seen = set()
     for index, landmarks in enumerate(landmark_groups):
-        if index >= len(handedness) or not handedness[index] or len(landmarks) <= 9:
+        if index >= len(handedness) or not handedness[index] or len(landmarks) <= 17:
             continue
         name = handedness[index][0].category_name
         if name == "Left":
@@ -86,15 +97,17 @@ def observations_from_result(result):
             category = gestures[index][0]
             gesture_id = GOOGLE_TO_ID.get(category.category_name)
             gesture_score = float(category.score)
-        wrist = landmarks[WRIST]
+        px, py = palm_center(landmarks)
+        margins = palm_margins(landmarks, px, py)
         observations.append(
             HandObservation(
                 hand=hand,
-                wrist_x=float(wrist.x),
-                wrist_y=float(wrist.y),
+                palm_x=px,
+                palm_y=py,
                 span=hand_span(landmarks),
                 gesture_id=gesture_id,
                 gesture_score=gesture_score,
+                margins=margins,
             )
         )
     return observations, landmark_groups
@@ -114,14 +127,19 @@ class HandTracker:
         self._controls = ControlTracker()
         self._timestamp_ms = 0
 
-    def process_frame(self, bgr_frame, enabled):
+    def process_frame(self, bgr_frame, enabled, rect_manager=None):
         rgb = np.ascontiguousarray(cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2RGB))
         self._timestamp_ms = max(self._timestamp_ms + 1, int(time.monotonic() * 1000))
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
         result = self._recognizer.recognize_for_video(mp_image, self._timestamp_ms)
         observations, landmark_groups = observations_from_result(result)
-        controls, events = self._controls.step(observations, enabled)
-        return controls, events, landmark_groups
+        active_rects = (
+            rect_manager.compute_rectangles(observations, enabled)
+            if rect_manager is not None
+            else {}
+        )
+        controls, events = self._controls.step(observations, enabled, active_rects)
+        return controls, events, landmark_groups, active_rects
 
     def close(self):
         self._recognizer.close()

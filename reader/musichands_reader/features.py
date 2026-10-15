@@ -22,17 +22,42 @@ GESTURE_OFF = 0.45
 SMOOTHING = 0.45
 
 WRIST = 0
+INDEX_MCP = 5
 MIDDLE_MCP = 9
+PINKY_MCP = 17
+PALM_POINTS = (WRIST, INDEX_MCP, PINKY_MCP)
+EXTREMITY_POINTS = (WRIST, 4, 8, 12, 16, 20)
 
 
 @dataclass
 class HandObservation:
     hand: str
-    wrist_x: float
-    wrist_y: float
+    palm_x: float
+    palm_y: float
     span: float
     gesture_id: str | None
     gesture_score: float
+    margins: tuple[float, float, float, float] | None = None
+
+
+def palm_center(landmarks) -> tuple[float, float]:
+    """Return average (x, y) of the 3 palm landmarks (wrist, index MCP, pinky MCP)."""
+    x = sum(float(landmarks[idx].x) for idx in PALM_POINTS) / len(PALM_POINTS)
+    y = sum(float(landmarks[idx].y) for idx in PALM_POINTS) / len(PALM_POINTS)
+    return x, y
+
+
+def palm_margins(landmarks, palm_x: float, palm_y: float) -> tuple[float, float, float, float]:
+    """Return (left, right, top, bottom) distances from palm center to wrist and fingertips."""
+    xs = [float(landmarks[idx].x) for idx in EXTREMITY_POINTS if idx < len(landmarks)]
+    ys = [float(landmarks[idx].y) for idx in EXTREMITY_POINTS if idx < len(landmarks)]
+    if not xs or not ys:
+        return (0.10, 0.10, 0.12, 0.12)
+    left = max(0.0, palm_x - min(xs))
+    right = max(0.0, max(xs) - palm_x)
+    top = max(0.0, palm_y - min(ys))
+    bottom = max(0.0, max(ys) - palm_y)
+    return (left, right, top, bottom)
 
 
 def span_to_z(span):
@@ -52,7 +77,7 @@ class ControlTracker:
         self._logged_trigger = {}
         self._on_wire = {}
 
-    def step(self, observations, enabled):
+    def step(self, observations, enabled, rects=None):
         by_hand = {}
         for observation in observations:
             if observation.hand in HANDS and observation.hand not in by_hand:
@@ -76,9 +101,17 @@ class ControlTracker:
                     self._logged_slider.pop((hand, control_id), None)
                 continue
 
+            rect = rects.get(hand) if rects else None
+            if rect is not None:
+                norm_x = rect.normalize_x(observation.palm_x)
+                norm_y = rect.normalize_y(observation.palm_y)
+            else:
+                norm_x = max(0.0, min(1.0, observation.palm_x))
+                norm_y = max(0.0, min(1.0, 1.0 - observation.palm_y))
+
             slider_targets = {
-                "palm_x": observation.wrist_x * 255.0,
-                "palm_y": (1.0 - observation.wrist_y) * 255.0,
+                "palm_x": norm_x * 255.0,
+                "palm_y": norm_y * 255.0,
                 "palm_z": span_to_z(observation.span),
             }
             for control_id in SLIDER_IDS:

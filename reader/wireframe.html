@@ -52,9 +52,21 @@
       min-height: 0;
     }
     aside section { margin-left: 0; }
+    aside section.settings { overflow: auto; max-height: 55vh; }
     ul { list-style: none; margin: 0; padding: 8px; }
     li { margin: 4px 0; }
     .group { margin: 8px 8px 0; font-size: 12px; }
+    .rect-manual { padding: 0 8px 8px; font-size: 12px; }
+    .rect-hand { margin-top: 6px; font-weight: 600; }
+    .rect-grid {
+      display: grid;
+      grid-template-columns: 64px 1fr 34px;
+      align-items: center;
+      gap: 4px 6px;
+      margin-top: 4px;
+    }
+    .rect-grid input[type="range"] { width: 100%; margin: 0; }
+    .rect-val { text-align: right; font-variant-numeric: tabular-nums; }
     .queue { overflow: auto; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid black; }
@@ -68,7 +80,7 @@
       <div class="stage">Video with hand dots and finger lines</div>
     </section>
     <aside>
-      <section>
+      <section class="settings">
         <h2>Active inputs</h2>
         <div class="group">Triggers</div>
         <ul>
@@ -86,6 +98,26 @@
           <li><label><input type="checkbox"> Right palm Y</label></li>
           <li><label><input type="checkbox"> Right palm Z</label></li>
         </ul>
+        <div class="group">Rectangles</div>
+        <ul>
+          <li><label><input type="checkbox" checked> Automatic rectangles</label></li>
+        </ul>
+        <div class="rect-manual">
+          <div class="rect-hand">Left hand (red)</div>
+          <div class="rect-grid">
+            <label>Center X</label><input type="range" min="0" max="1" step="0.01" value="0.25"><span class="rect-val">0.25</span>
+            <label>Center Y</label><input type="range" min="0" max="1" step="0.01" value="0.50"><span class="rect-val">0.50</span>
+            <label>Width X</label><input type="range" min="0" max="1" step="0.01" value="0.40"><span class="rect-val">0.40</span>
+            <label>Height Y</label><input type="range" min="0" max="1" step="0.01" value="0.70"><span class="rect-val">0.70</span>
+          </div>
+          <div class="rect-hand">Right hand (blue)</div>
+          <div class="rect-grid">
+            <label>Center X</label><input type="range" min="0" max="1" step="0.01" value="0.75"><span class="rect-val">0.75</span>
+            <label>Center Y</label><input type="range" min="0" max="1" step="0.01" value="0.50"><span class="rect-val">0.50</span>
+            <label>Width X</label><input type="range" min="0" max="1" step="0.01" value="0.40"><span class="rect-val">0.40</span>
+            <label>Height Y</label><input type="range" min="0" max="1" step="0.01" value="0.70"><span class="rect-val">0.70</span>
+          </div>
+        </div>
       </section>
       <section class="queue">
         <h2>Trigger changes</h2>
