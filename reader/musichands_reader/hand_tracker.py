@@ -1,0 +1,127 @@
+"""MediaPipe hand landmark detection, gesture recognition, and skeleton overlay."""
+
+import os
+
+os.environ.setdefault("GLOG_minloglevel", "2")
+
+import time
+import urllib.request
+from pathlib import Path
+
+import cv2
+import mediapipe as mp
+import numpy as np
+from mediapipe.tasks.python.core.base_options import BaseOptions
+from mediapipe.tasks.python.vision import (
+    GestureRecognizer,
+    GestureRecognizerOptions,
+    RunningMode,
+)
+
+from musichands_reader.catalog import GOOGLE_TO_ID
+from musichands_reader.features import WRIST, ControlTracker, HandObservation, hand_span
+
+ROOT = Path(__file__).resolve().parent.parent
+MODEL_PATH = ROOT / "models" / "gesture_recognizer.task"
+MODEL_URL = (
+    "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/"
+    "gesture_recognizer/float16/1/gesture_recognizer.task"
+)
+
+HAND_CONNECTIONS = (
+    (0, 1), (1, 2), (2, 3), (3, 4),
+    (0, 5), (5, 6), (6, 7), (7, 8),
+    (5, 9), (9, 10), (10, 11), (11, 12),
+    (9, 13), (13, 14), (14, 15), (15, 16),
+    (13, 17), (0, 17), (17, 18), (18, 19), (19, 20),
+)
+
+
+def ensure_model(model_path=None):
+    target = Path(model_path) if model_path is not None else MODEL_PATH
+    if target.exists() and target.stat().st_size > 0:
+        return target
+    target.parent.mkdir(parents=True, exist_ok=True)
+    print(f"Downloading gesture model to {target}")
+    urllib.request.urlretrieve(MODEL_URL, target)
+    return target
+
+
+def draw_hands(frame, hands):
+    height, width = frame.shape[:2]
+    for landmarks in hands:
+        points = []
+        for landmark in landmarks:
+            points.append((int(landmark.x * width), int(landmark.y * height)))
+        for start, end in HAND_CONNECTIONS:
+            cv2.line(frame, points[start], points[end], (0, 0, 0), 4, cv2.LINE_AA)
+            cv2.line(frame, points[start], points[end], (255, 255, 255), 2, cv2.LINE_AA)
+        for point in points:
+            cv2.circle(frame, point, 4, (255, 255, 255), -1, cv2.LINE_AA)
+            cv2.circle(frame, point, 4, (0, 0, 0), 1, cv2.LINE_AA)
+
+
+def observations_from_result(result):
+    observations = []
+    landmark_groups = result.hand_landmarks or []
+    handedness = result.handedness or []
+    gestures = result.gestures or []
+    seen = set()
+    for index, landmarks in enumerate(landmark_groups):
+        if index >= len(handedness) or not handedness[index] or len(landmarks) <= 9:
+            continue
+        name = handedness[index][0].category_name
+        if name == "Left":
+            hand = "L"
+        elif name == "Right":
+            hand = "R"
+        else:
+            continue
+        if hand in seen:
+            continue
+        seen.add(hand)
+        gesture_id = None
+        gesture_score = 0.0
+        if index < len(gestures) and gestures[index]:
+            category = gestures[index][0]
+            gesture_id = GOOGLE_TO_ID.get(category.category_name)
+            gesture_score = float(category.score)
+        wrist = landmarks[WRIST]
+        observations.append(
+            HandObservation(
+                hand=hand,
+                wrist_x=float(wrist.x),
+                wrist_y=float(wrist.y),
+                span=hand_span(landmarks),
+                gesture_id=gesture_id,
+                gesture_score=gesture_score,
+            )
+        )
+    return observations, landmark_groups
+
+
+class HandTracker:
+    """Runs MediaPipe video gesture recognition and tracks control state."""
+
+    def __init__(self, model_path=None):
+        resolved_model = ensure_model(model_path)
+        options = GestureRecognizerOptions(
+            base_options=BaseOptions(model_asset_path=str(resolved_model)),
+            running_mode=RunningMode.VIDEO,
+            num_hands=2,
+        )
+        self._recognizer = GestureRecognizer.create_from_options(options)
+        self._controls = ControlTracker()
+        self._timestamp_ms = 0
+
+    def process_frame(self, bgr_frame, enabled):
+        rgb = np.ascontiguousarray(cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2RGB))
+        self._timestamp_ms = max(self._timestamp_ms + 1, int(time.monotonic() * 1000))
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+        result = self._recognizer.recognize_for_video(mp_image, self._timestamp_ms)
+        observations, landmark_groups = observations_from_result(result)
+        controls, events = self._controls.step(observations, enabled)
+        return controls, events, landmark_groups
+
+    def close(self):
+        self._recognizer.close()

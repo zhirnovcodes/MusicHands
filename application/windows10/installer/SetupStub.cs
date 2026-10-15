@@ -315,8 +315,7 @@ namespace MusicHandsSetup
                             // Preserve existing user config files when upgrading
                             bool isUserConfig = (
                                 string.Equals(relativePath, "config.json", StringComparison.OrdinalIgnoreCase) ||
-                                string.Equals(relativePath, "enabled.json", StringComparison.OrdinalIgnoreCase) ||
-                                string.Equals(relativePath, "camera.json", StringComparison.OrdinalIgnoreCase)
+                                string.Equals(relativePath, "enabled.json", StringComparison.OrdinalIgnoreCase)
                             );
                             if (isUserConfig && File.Exists(destPath))
                             {
