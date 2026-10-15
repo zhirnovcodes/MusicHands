@@ -1,0 +1,2 @@
+-r ../../reader/requirements.txt
+-r ../../bridge/requirements.txt
