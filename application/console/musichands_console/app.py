@@ -188,12 +188,28 @@ def build_parser():
     parser.add_argument("--no-browser", action="store_true", help="Do not open the Reader UI in a browser")
     parser.add_argument("--quiet", action="store_true", help="Suppress MIDI message logging")
     parser.add_argument("--verbose", action="store_true", help="Also log startup/status messages")
+    parser.add_argument(
+        "--setup",
+        action="store_true",
+        help="Create .venv, install dependencies, download MediaPipe model, verify MIDI driver, and exit",
+    )
+    parser.add_argument(
+        "--no-bootstrap",
+        action="store_true",
+        help="Skip automatic .venv creation and dependency installation on startup",
+    )
     return parser
 
 
 def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    from musichands_console.bootstrap import bootstrap_if_needed
+
+    bootstrap_rc = bootstrap_if_needed(argv)
+    if bootstrap_rc is not None:
+        return bootstrap_rc
 
     instance_lock = acquire_single_instance_lock()
     if instance_lock is None:
