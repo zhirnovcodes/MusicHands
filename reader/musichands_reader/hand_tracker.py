@@ -26,6 +26,7 @@ from musichands_reader.features import (
     palm_center,
     palm_margins,
 )
+from musichands_reader.hand_rectangles import HAND_COLORS_BGR
 
 ROOT = Path(__file__).resolve().parent.parent
 MODEL_PATH = ROOT / "models" / "gesture_recognizer.task"
@@ -55,7 +56,11 @@ def ensure_model(model_path=None):
 
 def draw_hands(frame, hands):
     height, width = frame.shape[:2]
-    for landmarks in hands:
+    for item in hands:
+        if isinstance(item, tuple) and len(item) == 2:
+            hand, landmarks = item
+        else:
+            hand, landmarks = None, item
         points = []
         for landmark in landmarks:
             points.append((int(landmark.x * width), int(landmark.y * height)))
@@ -68,12 +73,14 @@ def draw_hands(frame, hands):
         if len(landmarks) > 17:
             px, py = palm_center(landmarks)
             center_pt = (int(px * width), int(py * height))
-            cv2.circle(frame, center_pt, 6, (0, 0, 255), -1, cv2.LINE_AA)
+            dot_color = HAND_COLORS_BGR.get(hand, (0, 0, 255))
+            cv2.circle(frame, center_pt, 6, dot_color, -1, cv2.LINE_AA)
             cv2.circle(frame, center_pt, 6, (0, 0, 0), 1, cv2.LINE_AA)
 
 
 def observations_from_result(result):
     observations = []
+    hand_landmarks = []
     landmark_groups = result.hand_landmarks or []
     handedness = result.handedness or []
     gestures = result.gestures or []
@@ -81,16 +88,19 @@ def observations_from_result(result):
     for index, landmarks in enumerate(landmark_groups):
         if index >= len(handedness) or not handedness[index] or len(landmarks) <= 17:
             continue
+        # Frames are horizontally mirrored (cv2.flip) before tracking, which
+        # inverts MediaPipe's non-mirrored handedness classification.
         name = handedness[index][0].category_name
         if name == "Left":
-            hand = "L"
-        elif name == "Right":
             hand = "R"
+        elif name == "Right":
+            hand = "L"
         else:
             continue
         if hand in seen:
             continue
         seen.add(hand)
+        hand_landmarks.append((hand, landmarks))
         gesture_id = None
         gesture_score = 0.0
         if index < len(gestures) and gestures[index]:
@@ -110,7 +120,7 @@ def observations_from_result(result):
                 margins=margins,
             )
         )
-    return observations, landmark_groups
+    return observations, hand_landmarks
 
 
 class HandTracker:
