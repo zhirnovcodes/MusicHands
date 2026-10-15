@@ -6,7 +6,7 @@ It connects to your webcam, tracks your hand positions and basic gestures in rea
 
 [![MusicHands Demo Video](https://img.youtube.com/vi/cGj63p7LfAU/maxresdefault.jpg)](https://youtu.be/cGj63p7LfAU)
 
-> **Watch the demo & walkthrough on YouTube:** [https://youtu.be/cGj63p7LfAU](https://youtu.be/cGj63p7LfAU)
+> **Watch the demo on YouTube:** [https://youtu.be/cGj63p7LfAU](https://youtu.be/cGj63p7LfAU)
 
 ---
 
