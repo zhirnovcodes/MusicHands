@@ -4,7 +4,9 @@
 
 It connects to your webcam, tracks your hand positions and basic gestures in real time, translates them into MIDI signals, and sends them to a Windows virtual MIDI input. You can use it with **Ableton Live**, **FL Studio**, **TouchDesigner**, or any other MIDI-compatible software.
 
-![MusicHands Demo with Ableton Live](assets/demo.jpg)
+[![MusicHands Demo Video](https://img.youtube.com/vi/cGj63p7LfAU/maxresdefault.jpg)](https://youtu.be/cGj63p7LfAU)
+
+> **Watch the demo & walkthrough on YouTube:** [https://youtu.be/cGj63p7LfAU](https://youtu.be/cGj63p7LfAU)
 
 ---
 
