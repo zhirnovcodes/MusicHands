@@ -1,0 +1,22 @@
+{
+  "name": "@musichands/web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build:daw": "tsc --noEmit && vitest run && vite build --config vite.daw.config.ts"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "1.2.2",
+    "ivandaw-core": "github:zhirnovcodes/ivan-daw-core#v0.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0"
+  }
+}

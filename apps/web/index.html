@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MusicHands dev page</title>
+    <style>
+      body { margin: 0; padding: 16px; background: #0f1113; color: #e7e9ee; font: 13px/1.4 system-ui, sans-serif; }
+      main { display: grid; grid-template-columns: 560px 1fr; gap: 16px; align-items: start; }
+      #plugin { width: 560px; height: 340px; border: 1px solid #33373f; }
+      button { height: 28px; padding: 0 14px; }
+      .ports { display: grid; grid-template-columns: 48px 1fr 40px; gap: 4px 8px; align-items: center; margin-bottom: 12px; }
+      .meter { height: 8px; background: #33373f; border-radius: 4px; overflow: hidden; }
+      .meter > div { height: 100%; width: 0; background: #4c95ff; }
+      #log { height: 220px; overflow: auto; margin: 0; padding: 8px; background: #17191d; font: 11px/1.4 ui-monospace, monospace; }
+    </style>
+  </head>
+  <body>
+    <p>
+      <button id="start" type="button">Start</button>
+      <label><input id="synth" type="checkbox" checked /> Play notes on a test synth</label>
+    </p>
+    <main>
+      <div id="plugin"></div>
+      <section>
+        <div class="ports" id="ports"></div>
+        <pre id="log"></pre>
+      </section>
+    </main>
+    <script type="module" src="/src/dev.ts"></script>
+  </body>
+</html>

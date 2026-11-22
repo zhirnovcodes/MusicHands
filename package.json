@@ -1,0 +1,13 @@
+{
+  "name": "musichands-root",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.34.9",
+  "scripts": {
+    "dev": "pnpm --filter @musichands/web dev",
+    "build:daw": "pnpm --filter @musichands/web build:daw"
+  }
+}

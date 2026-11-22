@@ -101,9 +101,21 @@ MIDI mappings are configured in [`bridge/config.json`](bridge/config.json):
 
 ---
 
+## IvanDAW Plugin (Browser)
+
+MusicHands also runs as a plugin inside [IvanDAW](https://github.com/zhirnovcodes/ivan-daw), the browser DAW. Hand tracking runs on the page through MediaPipe's WebAssembly build, so it needs no Python, loopMIDI or bridge.
+
+- Palm X / Y / Z of each hand → six modulation outputs (`l-x` … `r-z`). Cable them to any parameter, volume or pan.
+- Closed fist / open palm of each hand → notes on the `notes` output. Cable it to an instrument.
+
+Source, ports, parameters and build commands: [`apps/web/README.md`](apps/web/README.md). CI publishes each build as a `daw-build-<n>` release with `musichands-daw.zip`, which IvanDAW pins and downloads.
+
+---
+
 ## Project Structure
 
 - `reader/` — Webcam capture, MediaPipe hand/gesture tracking, bounding box logic, and web UI (`http://127.0.0.1:9110`).
 - `bridge/` — UDP listener, MIDI translator, loopMIDI driver integration, and mapping configuration.
 - `application/console/` — Single-command console launcher with automatic virtual environment bootstrapping.
 - `application/windows10/` — Windows desktop packaging and installer scripts.
+- `apps/web/` — IvanDAW web plugin: the same tracking in the browser (TypeScript + MediaPipe wasm).

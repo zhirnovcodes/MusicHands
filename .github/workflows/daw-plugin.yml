@@ -1,0 +1,72 @@
+name: DAW plugin
+
+# Builds the IvanDAW web plugin (apps/web/dist-daw/) and, on master, publishes it as
+# musichands-daw.zip in a daw-build-<run number> release. IvanDAW downloads a pinned release.
+# The zip's root is the content of dist-daw/, so index.js sits at the top level.
+# Same contract as docs/plugin-dev/05-ci-cd.md in ivan-daw; no wasm step: the plugin is TypeScript
+# on top of MediaPipe's prebuilt wasm.
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - "apps/web/**"
+      - "reader/models/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/daw-plugin.yml"
+  pull_request:
+    paths:
+      - "apps/web/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/daw-plugin.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build DAW plugin
+        run: pnpm --filter @musichands/web build:daw
+
+      - name: Zip
+        working-directory: apps/web/dist-daw
+        run: |
+          test -f index.js && test -f manifest.json
+          test -f mediapipe/vision_wasm_internal.wasm && test -f models/gesture_recognizer.task
+          zip -r "$GITHUB_WORKSPACE/musichands-daw.zip" .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: musichands-daw
+          path: musichands-daw.zip
+
+      - name: Publish release
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: daw-build-${{ github.run_number }}
+          name: DAW build ${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          files: musichands-daw.zip
+          body: |
+            MusicHands IvanDAW web plugin, built from ${{ github.sha }}.
+            Unzip as the plugin folder: index.js is at the top level.

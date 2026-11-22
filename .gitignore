@@ -16,3 +16,10 @@ application/windows10/*.spec
 
 # Downloaded MediaPipe model
 reader/models/*.task
+
+# IvanDAW web plugin (apps/web)
+node_modules/
+apps/web/dist-daw/
+apps/web/.cache/
+*.zip
+!bridge/musichands_bridge/loopMidi_install/*.zip
